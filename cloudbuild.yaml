@@ -1,0 +1,8 @@
+steps:
+  # Build image with tag 'latest'
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["build", "--tag", "gcr.io/$PROJECT_ID/mejuri:latest", "."]
+
+  # Push new image to Google Container Registry
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["push", "gcr.io/$PROJECT_ID/mejuri:latest"]
