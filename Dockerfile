@@ -5,7 +5,7 @@ RUN sed -i s/stretch-updates/stretch/g /etc/apt/sources.list
 RUN apt-get update -qq 
 # RUN apt-get upgrade
 RUN apt-get install -y nodejs postgresql-client
-WORKDIR /app
+WORKDIR /usr/src/app
 COPY Gemfile .
 COPY Gemfile.lock .
 ENV BUNDLE_FROZEN=true

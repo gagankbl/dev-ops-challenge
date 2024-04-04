@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-cd /app
+cd /usr/src/app
 
 # Create the Rails production DB on first run
 RAILS_ENV=production bundle exec rake db:create
