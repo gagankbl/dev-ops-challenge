@@ -1,18 +1,17 @@
 #!/usr/bin/env bash
 
-cd /usr/src/app
+cd /app
 
 # Create the Rails production DB on first run
 # RAILS_ENV=production bundle exec rake db:create
 
-# Make sure we are using the most up to date
-# database schema
+# update database schema
 RAILS_ENV=production bundle exec rake db:migrate
 
 # Do some protective cleanup
-> log/production.log
+# > log/production.log
+# Fixes a glitch with the pids directory by removing the server.pid file on execute.
 rm -f tmp/pids/server.pid
 
-# Run the web service on container startup
-# $PORT is provided as an environment variable by Cloud Run
+# Specify $PORT as an env variable through Cloud Run
 bundle exec rails server -e production -b 0.0.0.0 -p $PORT
