@@ -7,10 +7,10 @@ cd /usr/src/app
 
 # Make sure we are using the most up to date
 # database schema
-# RAILS_ENV=production bundle exec rake db:migrate
+RAILS_ENV=production bundle exec rake db:migrate
 
 # Do some protective cleanup
-# > log/production.log
+> log/production.log
 rm -f tmp/pids/server.pid
 
 # Run the web service on container startup
