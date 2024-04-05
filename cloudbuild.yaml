@@ -6,3 +6,15 @@ steps:
   # Push new image to Google Container Registry
   - name: "gcr.io/cloud-builders/docker"
     args: ["push", "gcr.io/$PROJECT_ID/mejuri:latest"]
+
+  # Deploy container image to Cloud Run
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: gcloud
+    args:
+      - "run"
+      - "deploy"
+      - "mejuri_service"
+      - "--image"
+      - "gcr.io/$PROJECT_ID/mejuri:latest"
+      - "--region"
+      - "northamerica-northeast2"
