@@ -18,3 +18,5 @@ steps:
       - "gcr.io/$PROJECT_ID/mejuri:latest"
       - "--region"
       - "northamerica-northeast2"
+options:
+  logging: CLOUD_LOGGING_ONLY
