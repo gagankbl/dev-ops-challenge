@@ -5,7 +5,6 @@ default: &default
   host: /cloudsql/mejuri-project-419216:northamerica-northeast2:mejuridb
   username: admin
   password: admin
-  port: 5432
 
 development:
   <<: *default
