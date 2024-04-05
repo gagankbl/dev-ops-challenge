@@ -2,7 +2,7 @@ default: &default
   adapter: postgresql
   encoding: unicode
   pool: 5
-  host: /cloudsql/mejuri-project-419216:northamerica-northeast2:psqlmejuri
+  host: /cloudsql/mejuri-project-419216:northamerica-northeast2:mejuridb
   username: admin
   password: admin
 
