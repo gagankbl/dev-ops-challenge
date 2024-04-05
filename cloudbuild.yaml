@@ -13,7 +13,7 @@ steps:
     args:
       - "run"
       - "deploy"
-      - "mejuri_service"
+      - "mejuritestservice"
       - "--image"
       - "gcr.io/$PROJECT_ID/mejuri:latest"
       - "--region"
