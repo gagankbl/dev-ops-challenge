@@ -6,7 +6,7 @@ cd /app
 # RAILS_ENV=production bundle exec rake db:create
 
 # update database schema
-RAILS_ENV=production bundle exec rake db:migrate
+# RAILS_ENV=production bundle exec rake db:migrate
 
 # Do some protective cleanup
 # > log/production.log
