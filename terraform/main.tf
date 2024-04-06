@@ -9,8 +9,11 @@ terraform {
 
 # define local variables
 locals {
-  project  = "mejuri-project-419216"
-  location = "northamerica-northeast2"
+  project                  = "mejuri-project-419216"
+  project_id               = "933134782080"
+  location                 = "northamerica-northeast2"
+  git_app_installation_id  = "49210172"
+  git_branch_trigger_regex = "changes$"
 }
 
 # define input variables
@@ -28,7 +31,7 @@ provider "google" {
 
 # create a service account and give it the needed roles to perform any of the tasks defined below
 resource "google_service_account" "mejuri_sa" {
-  account_id = "mejuri-sa"
+  account_id   = "mejuri-sa"
   display_name = "mejuriSA"
 }
 
@@ -44,7 +47,7 @@ resource "google_project_iam_member" "sa_binding" {
     "roles/artifactregistry.writer",
     "roles/iam.serviceAccountUser"
   ])
-  role = each.key
+  role    = each.key
   project = local.project
   member  = "serviceAccount:${google_service_account.mejuri_sa.email}"
 }
@@ -103,7 +106,7 @@ resource "google_sql_database_instance" "psqldb" {
   database_version = "POSTGRES_11"
   region           = local.location
   root_password    = "postgres"
-#   deletion_protection = false
+  # deletion_protection = false
   settings {
     tier = "db-custom-1-3840"
 
@@ -146,18 +149,19 @@ resource "google_storage_bucket_object" "db_file" {
   bucket       = google_storage_bucket.mejuri_bucket.id
 }
 
-## need this to let cloud sql import DB dump from storage bucket
+# need this to let cloud sql import DB dump from storage bucket
 resource "google_project_iam_member" "cloud_sql_sa_binding" {
-  role = "roles/storage.admin"
+  role    = "roles/storage.admin"
   project = local.project
   member  = "serviceAccount:${google_sql_database_instance.psqldb.service_account_email_address}"
 }
 
 ## NOTE additional step here (terraform doesnt seem to support it)
+## ALSO run this before creating the cluod run service to avoid any problems
 # import the SQL dump from the GCS bucket (uploaded above) into the database
 # run this gcloud command separately or manually insert from console (set the user to Admin during import):
 
-# gcloud sql import sql mejuridb gs://mejuri_bucket/database.yml --database=hello_world
+# gcloud sql import sql mejuridb gs://mejuri_bucket/database.yml --database=hello_world --user=admin
 
 
 # add the production base key value to secret manager so Cloud Run can access it
@@ -191,7 +195,7 @@ resource "google_secret_manager_secret_version" "github_token_secret_value" {
 data "google_iam_policy" "serviceagent_secretAccessor" {
     binding {
         role = "roles/secretmanager.secretAccessor"
-        members = ["serviceAccount:service-933134782080@gcp-sa-cloudbuild.iam.gserviceaccount.com"]
+        members = ["serviceAccount:service-${project_id}@gcp-sa-cloudbuild.iam.gserviceaccount.com"]
     }
 }
 
@@ -203,13 +207,13 @@ resource "google_secret_manager_secret_iam_policy" "policy" {
 
 # Create the GitHub connection
 resource "google_cloudbuildv2_connection" "git_connection" {
-    project = local.project
+    project  = local.project
     location = local.location
-    name = "git_connection"
+    name     = "git_connection"
 
     github_config {
         # this is the installation id of cloud build on the repo being used
-        app_installation_id = "49210172"
+        app_installation_id = local.git_app_installation_id
         authorizer_credential {
             oauth_token_secret_version = google_secret_manager_secret_version.github_token_secret_value.id
         }
@@ -218,9 +222,9 @@ resource "google_cloudbuildv2_connection" "git_connection" {
 }
 
 resource "google_cloudbuildv2_repository" "my_repository" {
-      project = local.project
+      project  = local.project
       location = local.location
-      name = "mejuri-project-repo"
+      name     = "mejuri-project-repo"
       parent_connection = google_cloudbuildv2_connection.git_connection.name
       remote_uri = "https://github.com/gagankbl/dev-ops-challenge.git"
   }
@@ -242,7 +246,7 @@ module "trigger" {
   service_account = google_service_account.mejuri_sa.email
   trigger_config = {
     is_pr_trigger   = false
-    branch_regex    = "changes$"
+    branch_regex    = local.git_branch_trigger_regex
     tag_regex       = null
     comment_control = null
   }
@@ -259,8 +263,8 @@ module "trigger" {
 resource "google_cloud_run_v2_service" "rails_service" {
   name     = "mejurirailsservice"
   location = local.location
-  ingress = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
-  client  = "gcloud"
+  ingress  = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
+  client   = "gcloud"
   client_version = "471.0.0"
 
   template {
@@ -306,7 +310,7 @@ resource "google_cloud_run_v2_service" "rails_service" {
   }
 
   traffic {
-    type = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
+    type    = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
     percent = 100
   }
   depends_on = [google_secret_manager_secret_version.prod_base_key_value]
@@ -381,6 +385,7 @@ resource "google_compute_region_network_endpoint_group" "serverless_neg" {
 
 
 
-# Once all done the service enpoint can be accessed like so:
+# Once all done the service endpoint can be accessed like so:
+# authenticate gcloud with a service account that has permissions first (the one created above)
 # curl -k -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
 # https://${LB_IP_ADDRESS}:443/hello_world
