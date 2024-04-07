@@ -1,0 +1,22 @@
+steps:
+  # Build image with tag 'latest'
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["build", "--tag", "gcr.io/$PROJECT_ID/mejuri:latest", "."]
+
+  # Push new image to Google Container Registry
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["push", "gcr.io/$PROJECT_ID/mejuri:latest"]
+
+  # Deploy container image to Cloud Run
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: gcloud
+    args:
+      - "run"
+      - "deploy"
+      - "mejurirailsservice"
+      - "--image"
+      - "gcr.io/$PROJECT_ID/mejuri:latest"
+      - "--region"
+      - "northamerica-northeast2"
+options:
+  defaultLogsBucketBehavior: REGIONAL_USER_OWNED_BUCKET

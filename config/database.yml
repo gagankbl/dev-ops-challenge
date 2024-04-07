@@ -2,7 +2,7 @@ default: &default
   adapter: postgresql
   encoding: unicode
   pool: 5
-  host: YOUR_DATABASE_HOST
+  host: /cloudsql/mejuri-project-419216:northamerica-northeast2:mejuridb
   username: admin
   password: admin
 
@@ -17,7 +17,7 @@ staging:
 production:
   <<: *default
   database: hello_world
-  
+
 # Warning: The database defined as "test" will be erased and
 # re-generated from your development database when you run "rake".
 # Do not set this db to the same as development or production.
