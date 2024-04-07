@@ -13,7 +13,8 @@ locals {
   project_id               = "933134782080"
   location                 = "northamerica-northeast2"
   git_app_installation_id  = "49210172"
-  git_branch_trigger_regex = "changes$"
+  git_branch_trigger_regex = "master$"
+  github_repo              = "https://github.com/gagankbl/dev-ops-challenge.git"
 }
 
 # define input variables
@@ -22,6 +23,18 @@ variable "github_token" {
 }
 
 variable "prod_base_key" {
+  type = string
+}
+
+variable "iap_client_id" {
+  type = string
+}
+
+variable "iap_client_secret" {
+  type = string
+}
+
+variable "account_auth_token" {
   type = string
 }
 
@@ -45,12 +58,18 @@ resource "google_project_iam_member" "sa_binding" {
     "roles/cloudbuild.builds.editor",
     "roles/logging.logWriter",
     "roles/artifactregistry.writer",
-    "roles/iam.serviceAccountUser"
+    "roles/iam.serviceAccountUser",
   ])
   role    = each.key
   project = local.project
   member  = "serviceAccount:${google_service_account.mejuri_sa.email}"
 }
+
+
+
+
+
+## SETUP NETWORKING
 
 # create vpc for below services 
 resource "google_compute_network" "mejuri_network" {
@@ -90,7 +109,7 @@ resource "google_vpc_access_connector" "mejuri_vpc_connector" {
   region        = local.location
 }
 
-# enable private google access so it can communicate with external google API endpoints
+# enable private google access for the subnet so it can communicate with external google API endpoints
 resource "google_compute_subnetwork" "mejuri_subnet" {
   name          = "mejuri-subnet"
   ip_cidr_range = "10.2.0.0/28"
@@ -99,6 +118,11 @@ resource "google_compute_subnetwork" "mejuri_subnet" {
   private_ip_google_access = true
 }
 
+
+
+
+
+## SETUP DATABASE
 
 # Create a SQL database instance
 resource "google_sql_database_instance" "psqldb" {
@@ -110,6 +134,7 @@ resource "google_sql_database_instance" "psqldb" {
   settings {
     tier = "db-custom-1-3840"
 
+    # this put the database behind a private IP accessible within the VPC
     ip_configuration {
       ipv4_enabled    = false
       private_network = google_compute_network.mejuri_network.id
@@ -178,6 +203,12 @@ resource "google_secret_manager_secret_version" "prod_base_key_value" {
 }
 
 
+
+
+
+
+## SETUP GITHUB CLOUD BUILD TRIGGER AND CLOUD RUN
+
 # Create a secret containing the Github personal access token for the repo
 resource "google_secret_manager_secret" "github_token_secret" {
     secret_id = "github_token"
@@ -226,7 +257,7 @@ resource "google_cloudbuildv2_repository" "my_repository" {
       location = local.location
       name     = "mejuri-project-repo"
       parent_connection = google_cloudbuildv2_connection.git_connection.name
-      remote_uri = "https://github.com/gagankbl/dev-ops-challenge.git"
+      remote_uri = local.github_repo
   }
 
 ## IMPORTANT: create this at the end after everything else is up and running
@@ -316,7 +347,13 @@ resource "google_cloud_run_v2_service" "rails_service" {
   depends_on = [google_secret_manager_secret_version.prod_base_key_value]
 }
 
+
+
+
+
 # ## SETUP EXTERNAL LOAD BALANCING
+
+
 
 # create a self signed ssl cert
 resource "google_compute_ssl_certificate" "ssl_cert" {
@@ -342,6 +379,7 @@ resource "google_compute_security_policy" "policy" {
 # supply the above created SSL cert
 # enable logging and keep CDN disabled for now (cost reasons)
 # also apply the cloud armor policy created above
+# place the LB behind IAP protection to allow only google authorized accounts to access endpoint
 module "lb-http" {
   source  = "terraform-google-modules/lb-http/google//modules/serverless_negs"
   version = "~> 10.0"
@@ -351,7 +389,15 @@ module "lb-http" {
 
   ssl                             = true
   https_redirect                  = true
-  ssl_certificates   = [google_compute_ssl_certificate.ssl_cert.self_link]
+
+  ## this ssl cert points to the self managed one created above
+  # ssl_certificates   = [google_compute_ssl_certificate.ssl_cert.self_link]
+
+  ## this ssl cert points to google managed one that I created from console pointing to 
+  ## my personal domain: thisisgagan.com
+  ## I also created the DNS record for this domain to point to the LB IP
+  ssl_certificates   = ["projects/mejuri-project-419216/global/sslCertificates/thisisgagancert"]
+  
   security_policy = google_compute_security_policy.policy.self_link
   backends = {
     default = {
@@ -364,7 +410,9 @@ module "lb-http" {
       enable_cdn = false
 
       iap_config = {
-        enable = false
+        enable               = true
+        oauth2_client_id     = var.iap_client_id
+        oauth2_client_secret = var.iap_client_secret
       }
       log_config = {
         enable = true
@@ -383,9 +431,121 @@ resource "google_compute_region_network_endpoint_group" "serverless_neg" {
   }
 }
 
+# give the IAP service account access to invoke the cloud run service
+resource "google_project_iam_member" "cloud_iap_sa_binding" {
+  role    = "roles/run.invoker"
+  project = local.project
+  member  = "serviceAccount:service-${local.project_id}@gcp-sa-iap.iam.gserviceaccount.com"
+}
+
+
+
+
+
+
+## MONITORING
+
+# create an uptime check for the service where it checks for response code 200 and
+# verifies response content of "Hello_world!"
+resource "google_monitoring_uptime_check_config" "uptime_check" {
+  display_name = "mejuri-https-uptime-check"
+  timeout = "10s"
+
+  http_check {
+    path = "/hello_world"
+    port = "443"
+    use_ssl = true
+    validate_ssl = true
+    mask_headers = true
+    headers = {
+      "Authorization" = "Bearer ${var.account_auth_token}"
+    }
+  }
+
+  monitored_resource {
+    type = "uptime_url"
+    labels = {
+      project_id = local.project
+      host = "thisisgagan.com"
+    }
+  }
+
+  content_matchers {
+    content = "Hello World!"
+    matcher = "CONTAINS_STRING"
+  }
+}
+
+# create an alert for when the above uptime check fails for any region
+resource "google_monitoring_alert_policy" "uptime_alert_policy" {
+  display_name = "Service uptime failure"
+  combiner     = "OR"
+  conditions {
+    display_name = "failure of uptime check for mejuri service"
+    condition_threshold {
+      filter     = "metric.type=\"monitoring.googleapis.com/uptime_check/check_passed\" AND resource.type=\"uptime_url\" AND metric.labels.check_id=${google_monitoring_uptime_check_config.uptime_check.uptime_check_id}"
+      duration   = "60s"
+      comparison = "COMPARISON_GT"
+      threshold_value = "1"
+      aggregations {
+        alignment_period   = "300s"
+        per_series_aligner = "ALIGN_NEXT_OLDER"
+        group_by_fields = [ "resource.labels.project_id", "resource.labels.host" ]
+        cross_series_reducer = "REDUCE_COUNT_FALSE"
+      }
+    }
+    
+  }
+}
+
+# create an alert for checking when service instance account is approaching limit 
+resource "google_monitoring_alert_policy" "instance_count_alert_policy" {
+  display_name = "Service instance count high"
+  combiner     = "OR"
+  conditions {
+    display_name = "Instance count is high"
+    condition_threshold {
+      filter     = "metric.type=\"run.googleapis.com/container/instance_count\" AND resource.type=\"cloud_run_revision\" AND resource.labels.service_name=${google_cloud_run_v2_service.rails_service.name}"
+      duration   = "60s"
+      comparison = "COMPARISON_GT"
+      threshold_value = "8"
+      aggregations {
+        alignment_period   = "300s"
+        per_series_aligner = "ALIGN_MEAN"
+      }
+    }
+  }
+}
+
+# create an alert for when service request latency is high
+resource "google_monitoring_alert_policy" "latency_alert_policy" {
+  display_name = "Service high latency"
+  combiner     = "OR"
+  conditions {
+    display_name = "Latency is high"
+    condition_threshold {
+      filter     = "metric.type=\"run.googleapis.com/request_latencies\" AND resource.type=\"cloud_run_revision\" AND resource.labels.service_name=${google_cloud_run_v2_service.rails_service.name}"
+      duration   = "60s"
+      comparison = "COMPARISON_GT"
+      threshold_value = "200"
+      aggregations {
+        alignment_period   = "300s"
+        per_series_aligner = "ALIGN_PERCENTILE_99"
+      }
+    }
+  }
+}
 
 
 # Once all done the service endpoint can be accessed like so:
+
+## No official domain, and no IAP :
 # authenticate gcloud with a service account that has permissions first (the one created above)
 # curl -k -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
 # https://${LB_IP_ADDRESS}:443/hello_world
+
+
+## my custom domain, with IAP enabled:
+# $OAUTH_CLIENT_ID=933134782080-56vi8k4ttpm6tesci45os65pm23r880t.apps.googleusercontent.com
+# curl -k -H "Authorization: Bearer $(gcloud auth print-identity-token --audiences $OAUTH_CLIENT_ID)" \
+# https://www.thisisgagan.com/hello_world
