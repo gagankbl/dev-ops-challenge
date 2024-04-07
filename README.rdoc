@@ -30,31 +30,31 @@ Please explain the reason for your decision.
 
 After you take a choice, please complete the following tasks.
 
-1. Create the infrastructure and the pipeline needed in order to serve our application from AWS/GCP containers.
+Create the infrastructure and the pipeline needed in order to serve our application from AWS/GCP containers.
 
 -   The infrastucture was created in my personal GCP project. I leveraged Terraform for majority of it
     so that it is easily destroyable and re-producable. This is present in the terraform/main.tf file. Please observe
     that file for the details related to the infrastructure. I have added comments explaining the resources I have 
     created with specific options enabled/disabled.
 
-2. Host our database in AWS RDS/ GCP SQL and import the current data (/db/database.sql).
+Host our database in AWS RDS/ GCP SQL and import the current data (/db/database.sql).
 
 -   The database is hosted on a Cloud SQL postgres instance. A GCS bucket contains the database.sql file so
     that it could be imported directly into the hello_world database.
 
-3. Create a script that easy deploy new code to the stack.
+Create a script that easy deploy new code to the stack.
 
 -   I have create a cloudbuild.yaml file that performs steps to build the container image using the Dockerfile
     and pushes it to GCR for storage. It then deploys this built image to a Cloud Run service. There is also a 
     git trigger setup that performs the task of continuous deployment of the service.
 
-4. Set autoscaling policies in order to have a minimum of 1 task, a desired of 1, and a maximum of 10 based on the CPU usage.
+Set autoscaling policies in order to have a minimum of 1 task, a desired of 1, and a maximum of 10 based on the CPU usage.
 
 -   In the terraform it can be observed that the cloud run service has options set, specifying the min and max instance
     counts which automatically scale up or down based on CPU being used by the number of requests incoming. By default,
     the scaling happens when CPU utilization hits 60%.
 
-5. Add some simple observability solution where we can monitor the app: APM or logs or both if you have the time.
+Add some simple observability solution where we can monitor the app: APM or logs or both if you have the time.
 
 -   Since I am using a managed service like Cloud Run, it already provides a built-in dashboard to monitor APM 
     metrics like CPU, memory, latency etc. These performance metrics were further used to create alerts when any
