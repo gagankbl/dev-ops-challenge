@@ -536,16 +536,17 @@ resource "google_monitoring_alert_policy" "latency_alert_policy" {
   }
 }
 
-
 # Once all done the service endpoint can be accessed like so:
-
-## No official domain, and no IAP :
-# authenticate gcloud with a service account that has permissions first (the one created above)
-# curl -k -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
-# https://${LB_IP_ADDRESS}:443/hello_world
-
 
 ## my custom domain, with IAP enabled:
 # $OAUTH_CLIENT_ID=933134782080-56vi8k4ttpm6tesci45os65pm23r880t.apps.googleusercontent.com
 # curl -k -H "Authorization: Bearer $(gcloud auth print-identity-token --audiences $OAUTH_CLIENT_ID)" \
 # https://www.thisisgagan.com/hello_world
+
+# I can also disable IAP and switch back to the private Cert
+# and then access it directly through LB's IP using an autorized service account
+
+## No official domain, and no IAP :
+# authenticate gcloud with a service account that has permissions first (the one created above)
+# curl -k -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
+# https://${LB_IP_ADDRESS}:443/hello_world

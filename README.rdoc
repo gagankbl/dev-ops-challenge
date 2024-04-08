@@ -32,8 +32,8 @@ After you take a choice, please complete the following tasks.
 
 Create the infrastructure and the pipeline needed in order to serve our application from AWS/GCP containers.
 
--   The infrastucture was created in my personal GCP project. I leveraged Terraform for majority of it
-    so that it is easily destroyable and re-producable. This is present in the terraform/main.tf file. Please observe
+-   The infrastucture was created in my personal GCP project. I have leveraged Terraform for this, so that 
+    it is easily destroyable and re-producable. This is present in the terraform/main.tf file. Please observe
     that file for the details related to the infrastructure. I have added comments explaining the resources I have 
     created with specific options enabled/disabled.
 
@@ -44,9 +44,9 @@ Host our database in AWS RDS/ GCP SQL and import the current data (/db/database.
 
 Create a script that easy deploy new code to the stack.
 
--   I have create a cloudbuild.yaml file that performs steps to build the container image using the Dockerfile
-    and pushes it to GCR for storage. It then deploys this built image to a Cloud Run service. There is also a 
-    git trigger setup that performs the task of continuous deployment of the service.
+-   I have created a cloudbuild.yaml file that performs steps to build the container image using the Dockerfile
+    and then pushes it to GCR for storage. It then deploys this built image to a Cloud Run service. There is also a 
+    git trigger setup that performs the task of continuous deployment for the service.
 
 Set autoscaling policies in order to have a minimum of 1 task, a desired of 1, and a maximum of 10 based on the CPU usage.
 
@@ -59,14 +59,12 @@ Add some simple observability solution where we can monitor the app: APM or logs
 -   Since I am using a managed service like Cloud Run, it already provides a built-in dashboard to monitor APM 
     metrics like CPU, memory, latency etc. These performance metrics were further used to create alerts when any
     value surpasses the set threshold (like high instance counts, and latency)
-    I have also created an uptime check pointing to the load balancer's IP so that I can monitor if the service is 
+    I have also created an uptime check pointing to the endpoint so that I can monitor if the service is 
     up and running, and things like latency from incoming requests from different parts of the world.
     In the cloudbuild.yaml I set logs behaviour to REGIONAL_USER_OWNED_BUCKET, which sends cloud build logs to 
     a logging bucket in the same region, allowing for later analysis of these logs.
     In the Dockerfile, I enabled the flag for RAILS_LOG_TO_STDOUT, so any application service related logs can be viewed
-    from stackdriver directly.
-    Loadbalancer logs were also enabled, along with VPC flow logs, so we can observe any suspicious requests hitting the LB
-    from the internet.
+    from stackdriver directly. Loadbalancer logs were also enabled.
 
 
 ## Application details:
